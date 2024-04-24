@@ -832,7 +832,7 @@ library(htmlwidgets)
 # saveWidget(cableMap, file="cableMap.html")
 ```
 
-## Bibliogrpahie
+## Bibliographie
 
 Lambert, N. & Zanin, C. (2016). *Manuel de cartographie: Principes, méthodes, applications*. Paris: Armand Colin.
 

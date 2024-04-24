@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ### Il existe deux types de cartes :
 
 1.  Les cartes **topographiques**. Essentiellement des observations directes : reliefs, cours d'eau, aménagements humains. Il s'agit d'éléments concrets, **fixes** et **durables** observés à un moment donné.
-2.  Les cartes **thématiques**. Il s'agit ici de représenter des phénomènes localisables, **quantitatif** ou **qualitatifs** de toute nature. C'est essentiellement ce type de carte qui nous intéresse en statistiques.
+2.  Les cartes **thématiques**. Il s'agit ici de représenter des phénomènes localisables, **quantitatifs** ou **qualitatifs** de toute nature. C'est essentiellement ce type de carte qui nous intéresse en statistiques.
 
 ### Pourquoi des cartes ?
 
@@ -56,7 +56,7 @@ En plus des formats mentionnés ci-dessus, d'autres formats de fichier cartograp
 En utilisant une combinaison de ces formats de données, il est possible créer des visualisations riches et informatives de l'information spatiale, permettant une meilleure compréhension et analyse de notre environnement géographique.
 
 ### Fichiers de *format texte* et *bases de données*
-En plus des *Shapefiles*, il est possible d'ajouter d'autres données à la carte, en utilisant des sources de données externes comme des fichiers en format texte comme le *CSV* (.csv), ou autres formats texte ou encore des bases de données. Il suffit ensuite de joindre ces données grâce à un identifiant commun dans R.
+En plus des *Shapefiles*, il est possible d'ajouter d'autres données à la carte, en utilisant des sources de données externes comme des fichiers en format texte comme le *CSV* (.csv), *JSON* (.json), ou autres formats texte ou encore des bases de données. Il suffit ensuite de joindre ces données grâce à un identifiant commun dans R.
 
 ### Télécharger des données SIG pour créer une carte
 Ce type de données est souvent en libre accès. Il est possible d'obtenir toutes sortes de données comme par exemple les frontières cantonales ou communales de la Suisse. Disponible à ce lien, les [couches de différents niveaux géographique de la Suisse](https://www.bfs.admin.ch/bfs/fr/home/statistiques/statistique-regions/fonds-cartes/niveaux-geographiques.html) permettent de créer des cartes. Nous allons ici utiliser les couches des limites communales suisses ainsi que celles des principaux lacs.
@@ -69,26 +69,76 @@ Sources de données
 
 ## Premiers pas et cartes statiques
 
+*Note pour le tutoriel : il est normalement possible d'exécuter les lignes de commandes sans adapter le code, il faut cependant installer les divers packages utilisés si ce n'est pas déjà fait. A noter aussi que chaque package utilisé est chargé ici au fur et à mesure, mais par convention, les packages sont habituellement chargés au tout début du script.*
+
 Initialement, les *shapefiles* devraient être exploités avec un logiciel de SIG, mais il est possible de les ouvrir dans R grâce au package `sf` (*Simple Features*). `sf` permet de lire les données géospatiales dans R. Il existe d'autres packages dévolus à cette fonction comme `rgdal`.
 
 Le processus est le suivant :
 
-Tout d'abord, télécharger le fichier des [communes et lacs suisses ainsi que résultats d'une votation](https://drive.switch.ch/index.php/s/fwxZfOmOiRqnMxc). Adapter également le répertoire de travail afin qu'il corresponde à celui de votre environnement R. (Il est possible d'utiliser le dossier `data` comme univers de travail.) A noter aussi que chaque package utilisé est chargé ici au fur et à mesure, mais par convention, les packages sont habituellement chargés au tout début du script.)
+Placer ce fichier R markdown dans un dossier depuis lequel travailler et commencer à exécuter les commandes. Il est important de préparer les données avant de commencer.
 
 ```{R, eval=F, echo=T}
-# adapter le répertoire de travail là où se trouve notre document
+# Adapter le répertoire de travail là où se trouve le document R markdown
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Créer un dossier nommé "geoData" (à faire une seule fois)
 dir.create("geoData")
 
-# Télécharger les données "Swissboundaries 3d" et dézipper le dossier
-url = "https://data.geo.admin.ch/ch.swisstopo.swissboundaries3d/swissboundaries3d_2024-01/swissboundaries3d_2024-01_2056_5728.shp.zip" # source des données
+# Télécharger les données "Swissboundaries 3d" sur le site de swisstopo et décompresser le dossier
+url <- "https://data.geo.admin.ch/ch.swisstopo.swissboundaries3d/swissboundaries3d_2024-01/swissboundaries3d_2024-01_2056_5728.shp.zip" # source des données
 download.file(url, "geoData/swissboundaries3d.zip") # téléchargement
 unzip("geoData/swissboundaries3d.zip", exdir="geoData/swissboundaries3d") # extraire les fichiers
 file.remove("geoData/swissboundaries3d.zip") # supprimer le fichier d'archive
 ```
 
+### Ouverture d'un shapefile dans R
+
+`st_read` permet de lire les données, ne pas oublier l'extension `.shp` à la fin du nom du fichier.
+
+```{R}
+library("sf") # installer chaque package si ce n'est pas déjà fait
+communesCH <- st_read("geoData/swissboundaries3d/swissBOUNDARIES3D_1_5_TLM_HOHEITSGEBIET.shp")
+communesCH <- communesCH[which(communesCH$BFS_NUMMER < 7000),] # ne garder que les communes suisses (n° OFS s'arrêtent à 7000)
+```
+
+Voici un exemple de fichier shapefile dans R. La commande `head(communesCH,3)` permet de visualiser les trois premières lignes des données contenues dans le fichier `communesCH`.
+
+```{R}
+head(communesCH,3)
+```
+
+La colonne `geometry` contient les données de géométrie, soit les coordonnées des points, lignes, polygones de chaque couche, importée par le package `sf`, accessible ici par `communesCH$geometry`. La fonction `plot` est issue du package de base de R.
+
+```{R}
+plot(communesCH$geometry)
+```
+
+Cette couche de données comporte une troisième dimension "Z" qui ne sera pas utile pour nos analyses et production de cartes. Afin d'éviter des problèmes de projection, il est préférable de supprimer cette dimension avec la fonction `st_zm()`.
+
+```{R}
+communesCH <- st_zm(communesCH, drop = T, what = "ZM")
+head(communesCH,1)
+```
+`Dimension:     XY` montre que la dimension `Z` a été supprimée
+
+`summary` résume les informations contenues dans chaque colonne d'un *simple feature* et donnes des statistiques de base
+
+```{R}
+summary(communesCH)
+```
+
+#### Ajout d'une deuxième couche: les lacs suisses
+
+Télécharger directement depuis GitHub la couche simplifiée des lacs suisses, provenant à la base de swisstopo.
+
+```{R}
+url_2 <- "https://github.com/romainloup/R_carto/raw/main/lacs.zip"
+download.file(url_2, "geoData/lacs.zip") # téléchargement
+unzip("geoData/lacs.zip", exdir="geoData") # extraire les fichiers
+file.remove("geoData/lacs.zip") # supprimer le fichier d'archive
+
+lacs <- st_read("geoData/lacs/lacs.shp")
+```
 
 #### Système de coordonnées et de projection
 
@@ -96,34 +146,20 @@ file.remove("geoData/swissboundaries3d.zip") # supprimer le fichier d'archive
 
 Il est important vérifier quel est le système de projection utilisé. La projection cartographique est un ensemble de techniques géodésiques permettant de représenter une surface non plane (surface de la Terre, d'un autre corps céleste, du ciel, ...) dans son ensemble ou en partie sur la surface plane d'une carte ([Wikipédia](https://fr.wikipedia.org/wiki/Projection_cartographique)).
 
-Il s'agit, d'une manière générale, d'adapter aux mieux sur une surface *plane* qui est une carte, la surface de la terre qui est *ellipsoïdale*.
+Il s'agit, de façon générale, de cartographier au mieux la réalité, en adaptant la surface *ellipsoïdale* de la terre à une représentation *plane*, celle d'une carte.
 
-Il existe plusieurs systèmes de projection qui s'adaptent au mieux suivant la zone du globe terreste ciblée. Avec le package `sf`, il est possible de vérifier quel est le système utilisé par les données utilisées. La commande `st_crs(communesCH)` (ci-dessous) permet de voir quel est le système de projection utilisé par les données `communesCH`.
-
-```{R}
-library("sf") # installer chaque package si ce n'est pas déjà fait
-communesCH <- st_read("geoData/swissboundaries3d/swissBOUNDARIES3D_1_5_TLM_HOHEITSGEBIET.shp")
-communesCH <- communesCH[which(communesCH$BFS_NUMMER < 7000),] # ne garder que les communes suisses
-plot(communesCH$geometry)
-# communesCH <- st_read("data/communes/communesWGSCH.shp")
-```
-Cette couche de données comporte une troisième dimension "Z" qui ne sera pas utile pour nos analyses et production de cartes. Afin d'éviter des problèmes de projection, il est préférable de supprimer cette dimension avec la fonction `st_zm()`.
+Plusieurs systèmes de projection sont disponibles pour s'adapter de manière optimale à différentes zones du globe terrestre. Grâce au package `sf`, il est possible de déterminer le système de projection utilisé par les données. La commande `st_crs(communesCH)` (ci-dessous) permet de consulter le système de projection utilisé par les données `communesCH`.
 
 ```{R}
-communesCH <- st_zm(communesCH, drop = T, what = "ZM")
 st_crs(communesCH)
 ```
-
-#### Ajout d'une deuxième couche
-
 ```{R}
-lacs <- st_read("data/lacs/lacs.shp")
 st_crs(lacs)
 ```
 
-Il est à noter que le système de projection pour la couche des lacs est différent que celui des communes. Si deux couches n'ont pas le même système de projection, il n'est pas possible de combiner les différentes couches. Les deux couches peuvent être affichées mais ne seront pas superposées.
+Il est à noter que le système de projection pour la couche des lacs est différent que celui des communes. Si deux couches n'ont pas le même système de projection, il n'est pas possible de les combiner. Les deux couches peuvent être affichées mais ne seront pas superposées.
 
-Il est alors possible d'uniformiser le système de projection (`crs`) :
+Il est alors possible d'uniformiser le système de projection (`crs`) avec la fonction `st_transform()` :
 
 ```{R}
 communesCH <- st_transform(communesCH, crs = 2056)
@@ -134,31 +170,12 @@ st_crs(communesCH)
 
 `4326`correspond au système de projection mondial (EPSG Geodetic Parameter Dataset) [WGS84](https://epsg.io/4326). Il est possible de trouver des informations sur les différents systèmes de projections [ici](https://epsg.io). Le système de projection suisse [CH1903+](https://epsg.io/2056) est l'EPSG 2056. `5728` correpsond au système de projection suisse CH1903+ pour [l'altitude](https://epsg.io/5728).
 
-#### Communes
+### Premières cartes : communes de Suisse et ses lacs
 
-Voilà à quoi ressemble un fichier shapefile dans R. La commande `head(communesCH,3)`permet de donner un aperçu des 3 premières lignes des données contenues dans le fichier `communesCH`.
-
-La colonne `geometry`contient les données de géométrie, soit les coordonnées des points, lignes, polygones de chaque couche, importée par le package `sf`, accessible ici par `communesCH$geometry`.
-
-```{R}
-head(communesCH,3)
-```
-
-`summary` résume les informations contenues dans chaque colonne d'un *simple feature*
-
-```{R}
-summary(communesCH)
-```
-
-#### Premières cartes : communes de Suisse et ses lacs
-
-Les cartes ci-dessous sont obtenues grâce aux *shapefiles* téléchargés précédemment. La fonction `plot` est issue du package de base de R.
+Les cartes ci-dessous sont obtenues grâce aux *shapefiles* téléchargés précédemment. Il est possible de superposer des couches et de leur donner une certaine esthétique.
 
 ```{R}
 par(mar=c(0,0,0,0)) # marges initialisées à 0
-# lacs <- st_transform(lacs, crs = 4326)
-# communesCH <- st_transform(communesCH, crs = 4326)
-
 plot(communesCH$geometry, col="grey", bg="#f2f2f2", lwd=0.25, border="#FFFFFF") # communes de Suisse, couleur grise, sur fond gris clair (#f2f2f2), marges à 0.
 plot(lacs$geometry, col="lightblue", bg="#f2f2f2", lwd=0.25, border=F, add=T) # pas de bordure et ajoutée à la couche précédente (add=T)
 ```
@@ -177,7 +194,7 @@ plot(lacs$geometry, col="lightblue", bg="#f2f2f2", lwd=0.25, border=F, add=T) # 
 
 Grâce à ces premiers outils, il est possible de réaliser la cartographie de phénomènes tels que les résultats des votations fédérales par commune.
 
-Charger le fichier `.csv` avec les résultats des votations sur les entreprises responsables.
+Charger le fichier `.json` avec les résultats de l'initiative populaire «Mieux vivre à la retraite (initiative pour une 13e rente AVS)».
 
 ```{R}
 library("jsonlite")
@@ -198,27 +215,7 @@ votation <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# for (i in 1:length(json_data$schweiz$vorlagen[[2]]$kantone)) {
-#   for (j in 1:length(json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden)) {
-#     noCommune = json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden[[j]]$geoLevelnummer
-#     nomCommune = json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden[[j]]$geoLevelname
-#     ouiPourcentCommune = json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden[[j]]$resultat$jaStimmenInProzent
-#     ouiCommune = json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden[[j]]$resultat$jaStimmenAbsolut
-#     nbBulletins = json_data$schweiz$vorlagen[[2]]$kantone[[i]]$gemeinden[[j]]$resultat$gueltigeStimmen
-# 
-#     
-#     # Add the values to the data frame
-#     result_df <- rbind(result_df, data.frame(
-#       noCommune = noCommune,
-#       nomCommune = nomCommune,
-#       ouiPourcentCommune = ouiPourcentCommune,
-#       ouiCommune = ouiCommune,
-#       nbBulletins = nbBulletins
-#     ))
-#     
-#   }
-# }
-
+# Récupérer les différentes données dans le JSON
 for (i in 1:length(json_data$schweiz$vorlagen$kantone[[1]]$gemeinden)) {
   noCommune = as.numeric(json_data$schweiz$vorlagen$kantone[[1]]$gemeinden[[i]]$geoLevelnummer)
   nomCommune = json_data$schweiz$vorlagen$kantone[[1]]$gemeinden[[i]]$geoLevelname
@@ -240,32 +237,22 @@ for (i in 1:length(json_data$schweiz$vorlagen$kantone[[1]]$gemeinden)) {
 
 Pour la commune n°1
 
-`gebietAusgezaehlt`: Zone comptabilisée (Valeur: TRUE
+-   `gebietAusgezaehlt`: Zone comptabilisée (Valeur: TRUE)
+-   `jaStimmenInProzent`: Pourcentage de votes "oui" (Valeur: 35.86498)
+-   `jaStimmenAbsolut`: Nombre absolu de votes "oui" (Valeur: 340)
+-   `neinStimmenAbsolut`: Nombre absolu de votes "non" (Valeur: 608)
+-   `stimmbeteiligungInProzent`: Taux de participation en pourcentage (Valeur: 69.44848)
+-   `eingelegteStimmzettel`: Nombre de bulletins de vote déposés (Valeur: 957)
+-   `anzahlStimmberechtigte`: Nombre d'électeurs inscrits (Valeur: 1378)
+-   `gueltigeStimmen`: Nombre de votes valides (Valeur: 948)
 
-`jaStimmenInProzent`: Pourcentage de votes "oui" (Valeur: 35.86498
+Pour lire un fichier `.csv` : `fichierCSV <- read.csv("fichierExemple.csv", header = TRUE)`
 
-`jaStimmenAbsolut`: Nombre absolu de votes "oui" (Valeur: 340
-
-`neinStimmenAbsolut`: Nombre absolu de votes "non" (Valeur: 608
-
-`stimmbeteiligungInProzent`: Taux de participation en pourcentage (Valeur: 69.44848
-
-`eingelegteStimmzettel`: Nombre de bulletins de vote déposés (Valeur: 957
-
-`anzahlStimmberechtigte`: Nombre d'électeurs inscrits (Valeur: 1378
-
-`gueltigeStimmen`: Nombre de votes valides (Valeur: 948)
-
-```{R}
-# dfEntrResp <- read.csv2("data/entrResp.csv", header = TRUE) # Lire le fichier .csv
-# head(dfEntrResp,3)
-```
-
-`header = TRUE` : obligatoire lorsque le fichier comprend une entête
+`header = TRUE` : lorsque le fichier comprend une entête
 
 #### Jointure de deux fichiers
 
-Renommer l'identifiant pour faire une jointure entre le `.shp` et le `.csv` grâce au package `dplyr`qui permet de manipuler les jeux de données. C'est un outil pour la manipulation de data frame qui permet par exemple de renommer des colonnes.
+Renommer l'identifiant pour faire une jointure entre le fihier des géométries et le fichier texte à l'aide du package `dplyr`qui permet de manipuler les jeux de données. C'est un outil pour la manipulation de data frame qui permet par exemple de renommer des colonnes.
 
 ```{R}
 library("dplyr")
@@ -275,16 +262,16 @@ names(communesCH)
 
 Le nom de `BFS_NUMMER`est bien devenu `noCommune`.
 
-Assembler (jointure) les deux fichiers en un nouveau fichier nommé `communesVotation`. Toutes les données relatives à la votation seront disponibles dans le *shapefile* des communes. Il faut par contre qu'il y ait un élément de jointure commun (ou le spécifier).
+Assembler (jointure) les deux fichiers en un nouveau fichier nommé `communesVotation`. Toutes les données relatives à la votation seront disponibles dans le fichier des communes. Il faut par contre qu'il y ait un élément de jointure commun (ou le spécifier).
 
 ```{R}
 communesVotation <- merge(communesCH, votation,by='noCommune')
 names(communesVotation)
 ```
 
-### Communes par canton
+### Manipuler des données, communes par canton
 
-La prochaine étape consiste à ajouter des couleurs à la première carte construite. Pour choisir les bonnes couleurs pour la cartographie, vous pouvez utiliser un site spécialisé appelé [ColoBrewer](https://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). Ce site vous offre la possibilité d'obtenir des palettes de couleurs soigneusement sélectionnées, permettant d'éviter les mauvais choix et garantissant une bonne visibilité pour les daltoniens, une restitution fidèle sur écran, ou encore une lisibilité optimale à l'impression.
+La prochaine étape consiste à ajouter des couleurs à la première carte construite. Pour sélectionner des couleurs appropriées pour la cartographie, vous pouvez utiliser un site spécialisé appelé [ColoBrewer](https://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). Ce site propose des palettes de couleurs soigneusement choisies, garantissant une bonne visibilité pour les daltoniens, une restitution fidèle sur écran, et une lisibilité optimale à l'impression, évitant ainsi les choix inadaptés.
 
 `ColorBrewer` est également disponible sous forme de package R. Vous trouverez plus d'informations à ce sujet en suivant ce [lien](https://www.datanovia.com/en/fr/blog/palette-de-couleurs-rcolorbrewer-de-a-a-z/). Toutes les palettes de couleurs disponibles peuvent être affichées en utilisant la commande `display.brewer.all()`.
 
@@ -304,7 +291,7 @@ my_colors <- colorRampPalette(my_colors)(26) # cette commande permet d'ajouter d
 my_colors # 26 couleurs dans la même palette sont disponibles
 ```
 
-Création d'une carte des communes suisses, par canton avec les principaux lacs
+Création d'une carte des communes suisses, par cantons avec les principaux lacs
 
 ```{R}
 # Attribue une couleur appropriée pour chaque canton en utilisant le numéro de canton
@@ -319,17 +306,17 @@ plot(lacs$geometry, col="lightblue", bg="#f2f2f2", lwd=0.1, border= F, add = T)
 
 En cartographie et en visualisation, il n'est pas conseillé d'utiliser 26 couleurs pour une seule carte. Le [théorème des quatre couleurs](https://fr.wikipedia.org/wiki/Théorème_des_quatre_couleurs) indique qu'il est possible, en n'utilisant que quatre couleurs différentes, de colorier n'importe quelle carte, ce qui rend la visualisation bien plus légère.
 
-### Aggréger des shapefiles
+### Aggréger des géométries
 
-Il est possible d'agréger des polygones dans un shapefile pour passer d'un découpage fin à un découpage plus large, pour passer par exemple d'une couche de communes à une couche de cantons avec la fonction `group_by()` en ayant un identifiant commun pour chaque commune (ici le numéro de canton). La population de chaque canton est sommée à partir de la population des communes dans la fonction `summarise`. Le nom de chaque canton est ensuite ajouté.
+Il est possible d'agréger des géométires (points, lignes, polygones) pour passer d'un découpage fin à un découpage plus large, pour passer par exemple d'une couche de communes à une couche de cantons avec la fonction `group_by()` en ayant un identifiant commun pour chaque commune (ici le numéro de canton). La population de chaque canton qui est présente dans une colonne, est sommée à partir de la population des communes dans la fonction `summarise`. Le nom de chaque canton est ensuite ajouté.
 
 ```{R}
 cantonsCH <- communesCH %>% 
   group_by(KANTONSNUM) %>% 
-  summarise(population = sum(EINWOHNERZ, na.rm = TRUE)) # na.rm = TRUE to ignore NA values
+  summarise(population = sum(EINWOHNERZ, na.rm = TRUE)) # na.rm = TRUE pour ignorer les valeurs NA
 
 # Récupération du nom du canton dans le fichier json
-cantonsCH$nomCanton <- json_data$schweiz$vorlagen$kantone[[1]]$geoLevelname 
+cantonsCH$nomCanton <- json_data$schweiz$vorlagen$kantone[[1]]$geoLevelname
 
 plot(cantonsCH$geometry, col=unique(my_colors_communes)) # couleurs réutilisées de la carte précédente
 ```
@@ -343,7 +330,7 @@ Il est possible de ne sélectionner qu'une seule partie d'un jeu de données. Pa
 La commande `subset` permet de sélectionner une partie précise des données en utilisant une requête logique. Dans ce cas particulier, elle peut être utilisée pour ne retenir que les données relatives aux cantons suisses.
 
 ```{R}
-# Ajout du nom de chaque canton
+# Ajout du nom de chaque canton dans "communesVotation"
 communesVotation <- inner_join(communesVotation, (as.data.frame(cantonsCH)[, c(1,4)]), by = c("KANTONSNUM" = "KANTONSNUM"))
 
 jura <- subset(communesVotation, communesVotation$KANTONSNUM =="26") # en sachant que le n°26 correspond au Jura
@@ -367,19 +354,19 @@ class_of_pop <- cut(vaud$EINWOHNERZ, breaks = c(1000000, 10000, 5000, 0))
 my_colors2 <- my_colors2[as.numeric(class_of_pop)]
 
 par(mar=c(0,0,0,0))
-plot(vaud$geometry, col=my_colors2 ,  bg = "#f2f2f2", lwd=0.5, border="#FFFFFF")
+plot(vaud$geometry, col=my_colors2,  bg = "#f2f2f2", lwd=0.5, border="#FFFFFF")
 plot(lacs$geometry[which(lacs$NAME=="Lac Léman")], col="#D6E2E7", lwd=0.5, border="#FFFFFF", add=T)
 ```
 
 ## GGplot
 
-`GGplot2`[^1] est une librairie de visualisation de données. Elle est utilisée pour la création de graphiques "*declarative*". Elle est développée selon les principes développés par Leland Wilkinson dans son ouvrage "*The Grammar of Graphics2*".
+`GGplot2`[^1] est une librairie de visualisation de données. Elle est utilisée pour la création de graphiques "*declarative*". Elle est développée selon les principes développés par Leland Wilkinson dans son ouvrage "*The Grammar of Graphics*".
 
 [^1]: Pour plus d'info sur GGplot et le `pipe`, voir *Cours R 2 : le tidyverse* de MQ4 donné par G.Guex
 
 ### Viridis
 
-Tout comme ColorBrewer, le package [Viridis](https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html) contient des échelles de couleurs pour rendre les cartes et graphiques plus jolis, plus facile à lire pour les daltoniens. Il est aussi possible de trouver des échelles de couleurs qui s'adaptent bien à l'écran où qui sont adaptés aux impressions.
+Tout comme ColorBrewer, le package [Viridis](https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html) contient des échelles de couleurs pour rendre les cartes et graphiques plus jolis, plus facile à lire pour les daltoniens. Il est aussi possible de trouver des échelles de couleurs qui s'adaptent bien à l'écran où qui sont adaptés aux impressions. Ici une carte choroplète (données relatives).
 
 ```{R}
 library("ggplot2")
@@ -387,6 +374,7 @@ library("ggsn") # complément à l'utilisation de ggplot, permettant de gérer
 # l'échelle et l'orientation grâce à l'ajout d'une flèche du nord
 library("viridis")
 
+# Projection mondiale WGS84
 communesVotationWGS84 <- st_transform(communesVotation, crs=4326)
 
 ggplot() +
@@ -431,9 +419,9 @@ ggplot() +
 -   Titre et sous-titre
 -   Légende
 -   Echelle (flèche du nord obligatoire uniquement si la carte n'est pas orientée au nord)
--   Source des données
--   Auteur
--   Date (année au moins)
+-   Sources des données
+-   Auteur·e·s
+-   Dates (données, fond et de création))
 
 A noter que pour la lisibilité d'une carte *thématique* (et non pour une carte *topographique*), une bonne pratique est de ne *pas* représenter les lacs en bleu afin de concenter l'attention des lecteurs sur l'information principale qui est ici une représentation d'une votation fédérale.
 
@@ -540,9 +528,11 @@ Cette méthode permet de projeter un fond de carte [OpenStreetMap](https://www.o
 
 Exemples de primitives :
 
--   **Point** (marqueur) : restaurants sur la ville de Lausanne, villes sur la carte du monde, toilettes sur le plan de l'Anthropole, etc
+-   **Point** (marqueur, cercles proportionnels) : restaurants sur la ville de Lausanne, villes sur la carte du monde, toilettes sur le plan de l'Anthropole, cercles propotionnels avec la population par canton, etc
 -   **Ligne** : routes sur la carte de la Suisse, rivières sur la carte du canton de Vaud, routes maritimes sur la carte du monde, etc
--   **Polygone** : bâtiments sur le plan du campus de l'Unil, ville de Lausanne sur une carte du canton de Vaud, pays sur une carte du monde, etc
+-   **Polygone** : bâtiments sur le plan du campus de l'Unil, ville de Lausanne sur une carte du canton de Vaud, pays sur une carte du monde, représentation des résultats de votations par communes suisses, etc
+
+Il est possible d'ajouter des tuiles d'un fond de carte et les trois types de primitives avec `Leaflet`. Les différents types d'éléments graphiques sont visibles en exécutant `?addControl` sur la consoles R. Il faudra donc jouer sur les septs variables visuelles définies par Bertin (1967): la position, la taille, la forme, la valeur, la couleur, l'orientation et la texture.
 
 #### Débuter avec Leaflet
 
@@ -560,34 +550,34 @@ myMap <- addMarkers(myMap, lng=6.579111, lat=46.526750, popup="Géopolis")
 myMap # Affiche la carte
 ```
 
-Même résultat avec les *pipes*[^1] afin d'éviter la répétition de code.
+Même résultat avec les *pipes* afin d'éviter la répétition de code.
 
 ```{R eval=FALSE}
 myMap <- leaflet() %>%
   addTiles() %>%  # Ajoute les tuiles OpenStreetMap par défaut
   addMarkers(lng=6.584349, lat=46.523704, popup="Anthropole") %>%
-  addMarkers(myMap, lng=6.579111, lat=46.526750, popup="Géopolis")
+  addMarkers(lng=6.579111, lat=46.526750, popup="Géopolis")
 ```
 
 ### Overpass Turbo
 
-[Overpass Turbo](https://wiki.openstreetmap.org/wiki/Overpass_turbo) est une [API](https://www.redhat.com/fr/topics/api/what-are-application-programming-interfaces) qui permet d'utiliser des attributs (points, lignes, polygones) issus d'OpenStreetMap. Les données sont entrées par les utilisateurs, il est donc possible qu'elles ne soient pas parfaites. A noter que le server OSM peut être capricieux et la requête lancée plusieurs fois...
+[Overpass Turbo](https://wiki.openstreetmap.org/wiki/Overpass_turbo) est une [API](https://www.redhat.com/fr/topics/api/what-are-application-programming-interfaces) qui permet d'utiliser des attributs (points, lignes, polygones) issus d'OpenStreetMap. Les données sont entrées par les utilisateurs, il est donc possible qu'elles ne soient pas parfaites. A noter que le server OSM peut être capricieux et la requête lancée plusieurs fois si les données sont lourdes.
 
 Des exemples sont disponibles sur [Cran osmdata](https://cran.r-project.org/web/packages/osmdata/vignettes/osmdata.html).
 
-Cet exemple montre comment obtenir une carte interactive des musées qui sont dans le canton en Vaud (polygone convexe). Un deuxième exemple est montré par la suite avec les musées du grand Londres.
+Cet exemple montre comment obtenir une carte interactive des musées qui sont dans le canton en Vaud (polygone convexe). Un deuxième exemple est effectué par la suite avec les musées du grand Londres.
 
 ```{R}
 # Obtenir une matrice des musées du canton de Vaud
 library("sf")
 library("osmdata")
 
-get_museum <- getbb("Vaud") %>%
-  opq () %>%
-  add_osm_feature(key = "tourism", value = "museum")
-
-museumP <- osmdata_sf(get_museum)$osm_points
-museumP <- museumP [which (museumP$name != 'is.na'), ]
+museumP <- getbb("Vaud") %>%
+  opq() %>%
+  add_osm_feature(key = "tourism", value = "museum") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  subset(!is.na(name))
 
 myMap <- 
   leaflet() %>%
@@ -609,7 +599,7 @@ get_museumLondon <- getbb("London") %>%
   add_osm_feature("tourism", "museum")
 
 museumPL <- osmdata_sf(get_museumLondon)$osm_points
-museumPL <- museumPL [which (museumPL$name != 'is.na'),]
+museumPL <- museumPL[which (museumPL$name != 'is.na'),]
 
 myMapCluster <- leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
@@ -626,8 +616,7 @@ myMapCluster
 #### Carte des remontées mécaniques dans la région du Valais
 
 La première distinction à faire avec cette carte réside dans le fait que les points sont ici cartographiés, qui représentent les systèmes de transport par câbles(`aerialway`).
-A cela s'ajoute deux fond de cartes issus de [SwissTopo](https://map.geo.admin.ch), le premier est la ["carte Siegfried"](https://www.swisstopo.admin.ch/fr/connaissances-faits/histoire-collections/cartes-historiques/carte-siegfried.html), représentée entre 1870 et 1926 et la seconde la carte en couleur de SwissTopo. La [liste de tous les fonds de carte de SwissTopo](https://www.geo.admin.ch/fr/faq-api-geoadmin/) est disponible et utilisable, mais nécessite une adaptation pour être affichée dans R.
-
+A cela s'ajoute deux fonds de carte issus de [SwissTopo](https://map.geo.admin.ch), le premier est la ["carte Siegfried"](https://www.swisstopo.admin.ch/fr/connaissances-faits/histoire-collections/cartes-historiques/carte-siegfried.html), représentée entre 1870 et 1926 et la seconde la carte en couleur de SwissTopo. La [liste de tous les fonds de carte de SwissTopo](https://www.geo.admin.ch/fr/faq-api-geoadmin/) est disponible et utilisable, mais nécessite une adaptation pour être affichée dans R.
 
 ```{R}
 library("sf")
@@ -662,7 +651,7 @@ cableMap <-
               options = WMSTileOptions(format = "image/png", 
                                        transparent = T),
               group = 'SwissTopo') %>%
-  addPolylines(data = aerialLines, popup = ~name, color = "#FF0000") %>% 
+  addPolylines(data = aerialLines, popup = ~name, color = "#FF0000", weight = 2, opacity = 0.9) %>% 
   addLayersControl(baseGroups = c('Siegfried', 'SwissTopo')) %>% # ajout du choix des fonds de carte
   addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = F))
 cableMap
@@ -672,6 +661,7 @@ cableMap
   -   `group` : permet de donner un identifiant à la couche
 -   `addLayersControl` : permet d'ajouter un *controller* de sélection de couche affichée à l'écran
 - `addScaleBar` : permet d'ajouter une échelle, ici en bas à droite, sans unité impériales
+
 
 ## Carte interactive : polygones
 
@@ -753,12 +743,14 @@ m2
     -   `labelOptions` : permet de définir la police, la taille, la couleur ou encore l'alignement du texte dans le popup
 -   `addLegend` : permet d'ajouter la légende et sa position à la carte. [Description détaillée](https://rdrr.io/github/rstudio/leaflet/man/addLegend.html) des options possibles
 
+Cette carte présente les résultats de la votation sur l'initiative pour une 13e rente AVS en mars 2024, en Suisse. Les communes sont colorées en fonction du pourcentage de votes "oui", avec des cercles proportionnels représentant la population des cantons sur une deuxième carte. Les lacs suisses sont également affichés en arrière-plan.
 
 ```{R}
 library(leaflet)
 library(leaflegend)
 cantonsCHWGS84 <- st_transform(cantonsCH, crs = 4326)
-# Convertissez les géométries de GEOMETRY en MULTIPOLYGON
+lacsWGS84 <- st_transform(lacs, crs = 4326)
+# Convertir les géométries de GEOMETRY en MULTIPOLYGON
 cantonsCHMP <- st_cast(cantonsCHWGS84, "MULTIPOLYGON") 
 # Extrait les coordonnées des géométries des cantons
 centroids <- st_centroid(cantonsCHMP) %>% st_coordinates()
@@ -775,8 +767,8 @@ symbols <- makeSymbolsSize(
   baseSize = 25
 )
 
+# Titre de la carte
 mapTitle = "« Mieux vivre à la retraite (initiative pour une 13e rente AVS) », mars 2024"
-# palDiv = colorNumeric("Spectral", NULL)
 
 leaflet(communesVotationWGS84) %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
@@ -796,16 +788,16 @@ leaflet(communesVotationWGS84) %>%
       bringToFront = TRUE,
       sendToBack = TRUE),
     
-    label = communesVotationWGS84$NAME,
+    label = paste(communesVotationWGS84$NAME, ":", communesVotationWGS84$ouiPourcentCommune, "%"),
     smoothFactor = 0.2,
-    group = "Votation",
+    group = "Votation"
   ) %>%
   addMarkers(data = cantonsCHMP,
              icon = symbols,
              lat = ~Y, lng = ~X,
-             label = paste(cantonsCHMP$nomCanton, " : ", cantonsCHMP$population),
+             label = paste(cantonsCHMP$nomCanton, ":", cantonsCHMP$population),
              group = "Population") %>%
-  addPolygons(data = lacs,
+  addPolygons(data = lacsWGS84,
               weight = 1,
               fillColor = "#dddddd",
               fillOpacity = 0.9,
@@ -815,13 +807,14 @@ leaflet(communesVotationWGS84) %>%
                 color = "#666",
                 fillOpacity = 1,
                 bringToFront = TRUE),
-              label = lacs$NAME,
+              label = lacsWGS84$NAME,
               labelOptions = labelOptions(
                                           style = list(
                                             "color" = "#666",
                                             "font-style" = "italic"
                                           )),
-              smoothFactor = 0.2) %>%
+              smoothFactor = 0.2,
+              group = "Votation") %>%
   addLayersControl(
     baseGroups = c("Votation","Population"),
     options = layersControlOptions(collapsed = TRUE)
@@ -842,3 +835,7 @@ library(htmlwidgets)
 ## Bibliogrpahie
 
 Lambert, N. & Zanin, C. (2016). *Manuel de cartographie: Principes, méthodes, applications*. Paris: Armand Colin.
+
+Wilkinson, L. (2005). *The Grammar of Graphics. Springer-Verlag*. New York: Springer https://doi.org/10.1007/0-387-28695-0
+
+Bertin, J. (1967). Sémiologie graphique: Les diagrammes, les réseaux, les cartes. EHESS.
